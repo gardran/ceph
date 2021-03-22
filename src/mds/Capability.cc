@@ -213,11 +213,7 @@ int Capability::confirm_receipt(ceph_seq_t seq, unsigned caps) {
     }
   }
 
-  if (was_revoking && _issued == _pending) {
-    item_revoking_caps.remove_myself();
-    item_client_revoking_caps.remove_myself();
-    maybe_clear_notable();
-  }
+  post_update(was_revoking);
   return was_revoking & ~_issued; // return revoked
 }
 
@@ -235,6 +231,18 @@ void Capability::revalidate()
 {
   if (!is_valid())
     cap_gen = session->get_cap_gen();
+}
+
+void Capability::post_update(int was_revoking)
+{
+  CInode *in = get_inode();
+  if (in)
+    in->update_client_cap(this);
+  if (was_revoking && _issued == _pending) {
+    item_revoking_caps.remove_myself();
+    item_client_revoking_caps.remove_myself();
+    maybe_clear_notable();
+  }
 }
 
 void Capability::mark_notable()
@@ -265,8 +273,11 @@ void Capability::set_wanted(int w) {
       in->adjust_num_caps_notable(-1);
       maybe_clear_notable();
     }
+    _wanted = w;
+    in->update_client_cap(this);
+  } else {
+    _wanted = w;
   }
-  _wanted = w;
 }
 
 void Capability::encode(ceph::buffer::list& bl) const
