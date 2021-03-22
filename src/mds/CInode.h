@@ -413,7 +413,6 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
     close_snaprealm();
     clear_file_locks();
     ceph_assert(num_projected_srnodes == 0);
-    ceph_assert(num_caps_notable == 0);
     ceph_assert(num_subtree_roots == 0);
     ceph_assert(num_exporting_dirs == 0);
     ceph_assert(batch_ops.empty());
@@ -877,8 +876,15 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
   bool is_any_nonstale_caps() { return count_nonstale_caps(); }
 
   const mempool::mds_co::compact_map<int32_t,int32_t>& get_mds_caps_wanted() const { return mds_caps_wanted; }
-  void set_mds_caps_wanted(mempool::mds_co::compact_map<int32_t,int32_t>& m);
-  void set_mds_caps_wanted(mds_rank_t mds, int32_t wanted);
+  void set_mds_caps_wanted(mempool::mds_co::compact_map<int32_t,int32_t>& m) {
+    mds_caps_wanted.swap(m);
+  }
+  void set_mds_caps_wanted(mds_rank_t mds, int32_t wanted) {
+    if (wanted)
+      mds_caps_wanted[mds] = wanted;
+    else
+      mds_caps_wanted.erase(mds);
+  }
 
   const mempool_cap_map& get_client_caps() const { return client_caps; }
   Capability *get_client_cap(client_t client) {
@@ -895,9 +901,6 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
       return 0;
     }
   }
-
-  int get_num_caps_notable() const { return num_caps_notable; }
-  void adjust_num_caps_notable(int d);
 
   Capability *add_client_cap(client_t client, Session *session,
 			     SnapRealm *conrealm=nullptr, bool new_inode=false);
@@ -920,7 +923,7 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
   // caps issued, wanted
   int get_caps_issued(int *ploner = 0, int *pother = 0, int *pxlocker = 0,
 		      int shift = 0, int mask = -1);
-  bool is_any_caps_wanted() const;
+  bool is_any_wr_caps_wanted() const;
   int get_caps_wanted(int *ploner = 0, int *pother = 0, int shift = 0, int mask = -1) const;
   bool issued_caps_need_gather(SimpleLock *lock);
 
@@ -1200,7 +1203,6 @@ protected:
   mempool_cap_map client_caps; // client -> caps
   mempool::mds_co::compact_map<int32_t, int32_t> mds_caps_wanted;     // [auth] mds -> caps wanted
   int replica_caps_wanted = 0; // [replica] what i've requested from auth
-  int num_caps_notable = 0;
 
   ceph_lock_state_t *fcntl_locks = nullptr;
   ceph_lock_state_t *flock_locks = nullptr;
