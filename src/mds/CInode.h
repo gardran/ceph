@@ -928,7 +928,6 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
   bool issued_caps_need_gather(SimpleLock *lock);
 
   // client writeable
-  bool is_clientwriteable() const { return state & STATE_CLIENTWRITEABLE; }
   void mark_clientwriteable();
   void clear_clientwriteable();
 
