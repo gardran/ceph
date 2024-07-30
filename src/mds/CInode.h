@@ -934,7 +934,7 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
                       int shift = 0, int mask = -1);
   bool is_any_caps_wanted() const;
   int get_caps_wanted();
-  int get_caps_wanted(int *ploner, int *pother, int shift = 0, int mask = -1) const;
+  void get_caps_wanted(int *ploner, int *pother, int shift = 0, int mask = -1);
   bool issued_caps_need_gather(SimpleLock *lock);
 
   // client writeable

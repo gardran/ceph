@@ -5644,7 +5644,8 @@ void Locker::file_eval(ScatterLock *lock, bool *need_issue)
 {
   CInode *in = static_cast<CInode*>(lock->get_parent());
   int loner_wanted, other_wanted;
-  int wanted = in->get_caps_wanted(&loner_wanted, &other_wanted, CEPH_CAP_SFILE);
+  in->get_caps_wanted(&loner_wanted, &other_wanted, CEPH_CAP_SFILE);
+  int wanted = loner_wanted | other_wanted;
   dout(7) << "file_eval wanted=" << gcap_string(wanted)
 	  << " loner_wanted=" << gcap_string(loner_wanted)
 	  << " other_wanted=" << gcap_string(other_wanted)

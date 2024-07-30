@@ -3753,39 +3753,54 @@ int CInode::get_caps_wanted()
   return all;
 }
 
-int CInode::get_caps_wanted(int *ploner, int *pother, int shift, int mask) const
+void CInode::get_caps_wanted(int *ploner, int *pother, int shift, int mask)
 {
-  int w = 0;
   int loner = 0, other = 0;
-
-  for (const auto &p : client_caps) {
-    if (!p.second.is_stale()) {
-      int t = p.second.wanted();
-      w |= t;
-      if (p.first == loner_cap)
-        loner |= t;
-      else
-        other |= t;
+  bool loner_seen = false;
+  if (pother) {
+    for (auto p = client_caps_by_state.begin();
+         p != client_caps_by_state.end(); ) {
+      if (p->second.empty()) {
+        client_caps_by_state.erase(p++);
+        continue;
+      }
+      for (auto q = p->second.begin(); !q.end(); ++q) {
+        Capability *cap = *q;
+        if (!cap->is_stale()) {
+          if (cap->get_client() == loner_cap) {
+            loner = cap->wanted();
+            loner_seen = true;
+          } else {
+            other |= cap->wanted();
+            break;
+          }
+        }
+      }
+      ++p;
     }
-    //cout << " get_caps_wanted client " << it->first << " " << cap_string(it->second.wanted()) << endl;
+    if (is_auth())
+      for (const auto &p : mds_caps_wanted) {
+        other |= p.second;
+      }
+    // we adjust wanted caps to prevent unnecessary lock transitions
+    // don't worry, when the quiesce lock is dropped
+    // the whole thing will get evaluated again, with a fixed mask
+    other &= get_caps_quiesce_mask();
+    *pother = (other >> shift) & mask;
   }
-  if (is_auth())
-    for (const auto &p : mds_caps_wanted) {
-      w |= p.second;
-      other |= p.second;
-      //cout << " get_caps_wanted mds " << it->first << " " << cap_string(it->second) << endl;
-    }
 
-  // we adjust wanted caps to prevent unnecessary lock transitions
-  // don't worry, when the quiesce lock is dropped
-  // the whole thing will get evaluated again, with a fixed mask
-  loner &= get_caps_quiesce_mask();
-  other &= get_caps_quiesce_mask();
-  w &= get_caps_quiesce_mask();
-
-  if (ploner) *ploner = (loner >> shift) & mask;
-  if (pother) *pother = (other >> shift) & mask;
-  return (w >> shift) & mask;
+  if (ploner) {
+    if (!loner_seen && loner_cap >= 0) {
+      auto it = client_caps.find(loner_cap);
+      if (it != client_caps.end())
+        loner = it->second.wanted();
+     }
+     // we adjust wanted caps to prevent unnecessary lock transitions
+     // don't worry, when the quiesce lock is dropped
+     // the whole thing will get evaluated again, with a fixed mask
+     loner &= get_caps_quiesce_mask();
+     *ploner = (loner >> shift) & mask;
+  }
 }
 
 bool CInode::issued_caps_need_gather(SimpleLock *lock)
