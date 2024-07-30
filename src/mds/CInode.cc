@@ -3469,7 +3469,8 @@ void CInode::remove_client_cap(client_t client)
   Capability *cap = &it->second;
   
   cap->item_session_caps.remove_myself();
-  cap->item_inode_caps.remove_myself();
+  cap->item_inode_issued_caps.remove_myself();
+  cap->item_inode_wanted_caps.remove_myself();
   cap->item_revoking_caps.remove_myself();
   cap->item_client_revoking_caps.remove_myself();
   containing_realm->remove_cap(client, cap);
@@ -3663,13 +3664,13 @@ int CInode::get_caps_issued()
     loner_cap = -1;
   }
 
-  for (auto p = client_caps_by_state.begin();
-       p != client_caps_by_state.end(); ) {
+  for (auto p = client_caps_by_issued.begin();
+       p != client_caps_by_issued.end(); ) {
     if (p->second.empty()) {
-      client_caps_by_state.erase(p++);
+      client_caps_by_issued.erase(p++);
       continue;
     }
-    int issued = p->first & 0xffffff;
+    int issued = p->first;
     if ((all & issued) == issued) {
       ++p;
       continue;
@@ -3683,7 +3684,7 @@ int CInode::get_caps_issued()
 }
 
 int CInode::get_caps_issued(int *ploner, int *pother, int *pxlocker,
-                            int shift, int mask)
+                           int shift, int mask)
 {
   int c = 0;
   int loner = 0, other = 0, xlocker = 0;
@@ -3708,10 +3709,10 @@ int CInode::get_caps_issued(int *ploner, int *pother, int *pxlocker,
 
 bool CInode::is_any_caps_wanted() const
 {
-  for (auto& p : client_caps_by_state) {
+  for (auto& p : client_caps_by_wanted) {
     if (p.second.empty())
       continue;
-    if ((p.first >> 24) & 0xffffff)
+    if (p.first)
       return true;
   }
   return false;
@@ -3720,13 +3721,13 @@ bool CInode::is_any_caps_wanted() const
 int CInode::get_caps_wanted()
 {
   int all = 0;
-  for (auto p = client_caps_by_state.begin();
-       p != client_caps_by_state.end(); ) {
+  for (auto p = client_caps_by_wanted.begin();
+       p != client_caps_by_wanted.end(); ) {
     if (p->second.empty()) {
-      client_caps_by_state.erase(p++);
+      client_caps_by_wanted.erase(p++);
       continue;
     }
-    int wanted = (p->first >> 24) & 0xffffff;
+    int wanted = p->first;
     if ((wanted & all) == wanted) {
       ++p;
       continue;
@@ -3749,7 +3750,7 @@ int CInode::get_caps_wanted()
   // don't worry, when the quiesce lock is dropped
   // the whole thing will get evaluated again, with a fixed mask
   all &= get_caps_quiesce_mask();
-  
+
   return all;
 }
 
@@ -3758,10 +3759,10 @@ void CInode::get_caps_wanted(int *ploner, int *pother, int shift, int mask)
   int loner = 0, other = 0;
   bool loner_seen = false;
   if (pother) {
-    for (auto p = client_caps_by_state.begin();
-         p != client_caps_by_state.end(); ) {
+    for (auto p = client_caps_by_wanted.begin();
+         p != client_caps_by_wanted.end(); ) {
       if (p->second.empty()) {
-        client_caps_by_state.erase(p++);
+        client_caps_by_wanted.erase(p++);
         continue;
       }
       for (auto q = p->second.begin(); !q.end(); ++q) {

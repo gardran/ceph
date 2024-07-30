@@ -907,11 +907,19 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
   Capability *add_client_cap(client_t client, Session *session,
 			     SnapRealm *conrealm=nullptr, bool new_inode=false);
   void remove_client_cap(client_t client);
-  void update_client_cap(Capability *cap) {
-    cap->item_inode_caps.remove_myself();
-    uint64_t idx =(uint64_t)cap->issued() | ((uint64_t)cap->wanted() << 24);
-    auto em = client_caps_by_state.emplace(idx, member_offset(Capability, item_inode_caps));
-    em.first->second.push_back(&cap->item_inode_caps);
+  void update_client_cap(Capability *cap, bool update_issued, bool update_wanted) {
+    if (update_issued) {
+      cap->item_inode_issued_caps.remove_myself();
+      auto em = client_caps_by_issued.emplace(cap->issued(),
+        member_offset(Capability, item_inode_issued_caps));
+      em.first->second.push_back(&cap->item_inode_issued_caps);
+    }
+    if(update_wanted) {
+      cap->item_inode_wanted_caps.remove_myself();
+      auto em = client_caps_by_wanted.emplace(cap->wanted(),
+        member_offset(Capability, item_inode_wanted_caps));
+      em.first->second.push_back(&cap->item_inode_wanted_caps);
+    }
   }
   void move_to_realm(SnapRealm *realm);
 
@@ -1211,7 +1219,8 @@ protected:
   // -- distributed state --
   // file capabilities
   mempool_cap_map client_caps; // client -> caps
-  mempool::mds_co::map<uint64_t, elist<Capability*> > client_caps_by_state;
+  mempool::mds_co::map<int, elist<Capability*> > client_caps_by_issued; // issued caps -> caps
+  mempool::mds_co::map<int, elist<Capability*> > client_caps_by_wanted; // wanted caps -> caps
   mempool::mds_co::compact_map<int32_t, int32_t> mds_caps_wanted;     // [auth] mds -> caps wanted
   int replica_caps_wanted = 0; // [replica] what i've requested from auth
   int num_caps_notable = 0;
