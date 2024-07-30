@@ -930,10 +930,11 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
 
   // caps issued, wanted
   int get_caps_issued();
-  void get_caps_issued(SimpleLock *lock, int *ploner, int *pother, int *pxlocker);
+  int get_caps_issued(int *ploner, int *pother, int *pxlocker,
+                      int shift = 0, int mask = -1);
   bool is_any_caps_wanted() const;
   int get_caps_wanted();
-  void get_caps_wanted(SimpleLock *lock, int *ploner, int *pother=nullptr);
+  int get_caps_wanted(int *ploner, int *pother, int shift = 0, int mask = -1) const;
   bool issued_caps_need_gather(SimpleLock *lock);
 
   // client writeable
